@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Release
+        run: |
+          xcodebuild archive \
+            -project MermaidViewer.xcodeproj \
+            -scheme MermaidViewer \
+            -configuration Release \
+            -archivePath build/Siren.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Export app from archive
+        run: |
+          cp -R build/Siren.xcarchive/Products/Applications/Siren.app build/Siren.app
+
+      - name: Create zip
+        run: |
+          cd build
+          ditto -c -k --sequesterRsrc --keepParent Siren.app "Siren-${{ steps.version.outputs.VERSION }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Siren-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
+
+  update-homebrew:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release asset
+        run: sleep 10
+
+      - name: Download release zip and compute SHA256
+        id: sha
+        run: |
+          URL="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/Siren-${{ steps.version.outputs.VERSION }}.zip"
+          curl -fSL -o siren.zip "$URL"
+          SHA=$(sha256sum siren.zip | awk '{print $1}')
+          echo "SHA256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: fuwasegu/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Cask
+        run: |
+          cat > homebrew-tap/Casks/siren.rb << 'CASK_EOF'
+          cask "siren" do
+            version "${{ steps.version.outputs.VERSION }}"
+            sha256 "${{ steps.sha.outputs.SHA256 }}"
+
+            url "https://github.com/${{ github.repository }}/releases/download/v#{version}/Siren-#{version}.zip"
+            name "Siren"
+            desc "Beautiful Mermaid diagram viewer for macOS"
+            homepage "https://github.com/${{ github.repository }}"
+
+            depends_on macos: ">= :ventura"
+
+            app "Siren.app"
+
+            postflight do
+              system_command "/usr/bin/xattr",
+                             args: ["-cr", "#{appdir}/Siren.app"],
+                             sudo: false
+            end
+
+            zap trash: [
+              "~/Library/Preferences/com.siren.app.plist",
+            ]
+          end
+          CASK_EOF
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/siren.rb
+          git commit -m "Update Siren to ${{ steps.version.outputs.VERSION }}"
+          git push
