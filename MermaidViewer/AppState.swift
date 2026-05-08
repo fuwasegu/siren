@@ -44,6 +44,9 @@ class AppState: ObservableObject {
     @Published var fileName: String = ""
     @Published var hasFile: Bool = false
     @Published var theme: AppTheme = .system
+    @Published var reloadToken: UUID = UUID()
+    @Published var loadError: String?
+    private var currentFileURL: URL?
 
     func openFile() {
         let panel = NSOpenPanel()
@@ -65,12 +68,22 @@ class AppState: ObservableObject {
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
             DispatchQueue.main.async {
+                self.currentFileURL = url
                 self.mermaidContent = content
                 self.fileName = url.lastPathComponent
                 self.hasFile = true
+                self.loadError = nil
             }
         } catch {
-            print("Failed to load file: \(error)")
+            DispatchQueue.main.async {
+                self.loadError = error.localizedDescription
+            }
         }
+    }
+
+    func reloadFile() {
+        guard let url = currentFileURL else { return }
+        reloadToken = UUID()
+        loadFile(url: url)
     }
 }
