@@ -6,7 +6,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if appState.hasFile {
-                MermaidCanvasView(mermaidContent: appState.mermaidContent, theme: appState.theme)
+                MermaidCanvasView(mermaidContent: appState.mermaidContent, theme: appState.theme, reloadToken: appState.reloadToken)
                     .environmentObject(appState)
                     .ignoresSafeArea()
 
@@ -14,18 +14,43 @@ struct ContentView: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Text(appState.fileName)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                            .padding(16)
+
+                        HStack(spacing: 8) {
+                            Text(appState.fileName)
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundColor(.secondary)
+
+                            Button(action: { appState.reloadFile() }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Reload file (⌘R)")
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(16)
                     }
                     Spacer()
                 }
             } else {
                 DropZoneView()
+            }
+
+            // Error banner (visible in both states)
+            if let error = appState.loadError {
+                VStack {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .padding(16)
+                    Spacer()
+                }
             }
         }
         .frame(minWidth: 700, minHeight: 500)

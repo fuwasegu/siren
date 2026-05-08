@@ -4,6 +4,7 @@ import WebKit
 struct MermaidCanvasView: NSViewRepresentable {
     let mermaidContent: String
     let theme: AppTheme
+    let reloadToken: UUID
 
     @EnvironmentObject var appState: AppState
 
@@ -36,8 +37,11 @@ struct MermaidCanvasView: NSViewRepresentable {
         case .dark: themeJS = "dark"
         }
 
-        // If content hasn't changed, just switch theme via JS
-        if context.coordinator.lastContent == mermaidContent && context.coordinator.hasLoaded {
+        let forceReload = context.coordinator.lastReloadToken != reloadToken
+        context.coordinator.lastReloadToken = reloadToken
+
+        // If content hasn't changed and not a forced reload, just switch theme via JS
+        if context.coordinator.lastContent == mermaidContent && context.coordinator.hasLoaded && !forceReload {
             webView.evaluateJavaScript("if(window.setTheme) window.setTheme('\(themeJS)');")
             return
         }
@@ -58,6 +62,7 @@ struct MermaidCanvasView: NSViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var lastContent: String = ""
         var hasLoaded = false
+        var lastReloadToken: UUID?
         weak var appState: AppState?
         weak var webView: WKWebView?
 

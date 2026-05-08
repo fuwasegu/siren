@@ -15,6 +15,12 @@ struct SirenApp: App {
                     appState.openFile()
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Button("Reload File") {
+                    appState.reloadFile()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!appState.hasFile)
             }
         }
         .windowStyle(.titleBar)
